@@ -26,8 +26,8 @@ class QueueManager(StorageResource):
     def resource_type(self) -> StorageResourceType:
         return StorageResourceType.QUEUE
 
-    async def send_messages(self, instance_inputs: list[str], to_encode: bool = True):
-        """Retrieve all queue entities that match a given query"""
+    async def send_messages(self, instance_inputs: list[str]):
+        """Send messages to the queue"""
         async with self.get_client() as queue_client:
             send_message_tasks = [
                 queue_client.send_message(input_msg) for input_msg in instance_inputs
