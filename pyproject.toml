@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "azaux"
-version = "0.1.0"
+version = "0.1.1.1"
 description = ""
 authors = ["Enrique <ebotiabarbera@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.11"
 azure-storage-blob = "^12.20.0"
 azure-storage-queue = "^12.10.0"
 
