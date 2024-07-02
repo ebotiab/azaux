@@ -37,7 +37,10 @@ class ContainerManager(StorageResource):
     @asynccontextmanager
     async def get_blob_client(self, filepath: str):
         async with self.get_client() as container_client:
-            yield container_client.get_blob_client(filepath)
+            blob_client = container_client.get_blob_client(filepath)
+            if not await blob_client.exists():
+                raise FileNotFoundError(f"Blob file not found: '{filepath}'")
+            yield blob_client
 
     async def list_blobs(self, **kwargs) -> list[str]:
         """Retrieve a list of blob files in the container"""
@@ -50,11 +53,8 @@ class ContainerManager(StorageResource):
     async def download_blob(self, filepath: str, **kwargs) -> bytes:
         """Retrieve data from a given blob file"""
         async with self.get_blob_client(filepath) as blob_client:
-            try:
-                blob = await blob_client.download_blob(**kwargs)
-                blob_data = await blob.readall()
-            except ResourceNotFoundError:
-                raise FileNotFoundError(f"Blob file not found: '{filepath}'")
+            blob = await blob_client.download_blob(**kwargs)
+            blob_data = await blob.readall()
             return blob_data
 
     async def download_blob_to_file(self, filepath: str):
