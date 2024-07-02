@@ -4,7 +4,7 @@ from azure.core.credentials import AzureNamedKeyCredential
 from azure.data.tables import TableEntity
 from azure.data.tables.aio import TableServiceClient
 
-from claims_runner.azure_helper.storage_resource import (
+from azaux.storage_resource import (
     StorageResourceType,
     StorageResource,
 )

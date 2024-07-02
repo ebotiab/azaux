@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "azaux"
-version = "0.2.1"
+version = "0.2.2"
 description = ""
 authors = ["Enrique <ebotiabarbera@gmail.com>"]
 readme = "README.md"
@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.11"
 azure-storage-blob = "^12.20.0"
 azure-storage-queue = "^12.10.0"
+azure-data-tables = "^12.5.0"
 
 
 [build-system]
