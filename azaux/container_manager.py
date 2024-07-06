@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from azure.core.credentials_async import AsyncTokenCredential
 
@@ -40,27 +41,26 @@ class ContainerManager(StorageResource):
             yield container_client
 
     @asynccontextmanager
-    async def get_blob_client(self, filepath: str, check_exists=True):
+    async def get_blob_client(self, blob_name: str, check_exists=True):
         async with self.get_client() as container_client:
-            blob_client = container_client.get_blob_client(filepath)
+            blob_client = container_client.get_blob_client(blob_name)
             if check_exists and not await blob_client.exists():
-                raise ResourceNotFoundError(f"Blob file not found: '{filepath}'")
+                raise ResourceNotFoundError(f"Blob file not found: '{blob_name}'")
             yield blob_client
 
     async def list_blobs(self, **kwargs) -> list[str]:
         """Retrieve a list of blob files in the container"""
         async with self.get_client() as container_client:
-            blob_list = []
-            async for blob in container_client.list_blobs(**kwargs):
-                blob_list.append(blob.name)
-            return blob_list
+            blob_names_list: list[str] = []
+            async for blob_properties in container_client.list_blobs(**kwargs):
+                blob_names_list.append(blob_properties.name)
+            return blob_names_list
 
-    async def download_blob(self, filepath: str, **kwargs) -> bytes:
+    async def download_blob(self, blob_name: str):
         """Retrieve data from a given blob file"""
-        async with self.get_blob_client(filepath) as blob_client:
-            blob = await blob_client.download_blob(**kwargs)
-            blob_data = await blob.readall()
-            return blob_data
+        async with self.get_blob_client(blob_name) as blob_client:
+            blob = await blob_client.download_blob()
+            return await blob.readall()
 
     async def download_blob_to_file(self, filepath: str):
         """Download a blob file to the local filesystem"""
@@ -68,20 +68,16 @@ class ContainerManager(StorageResource):
             blob_data = await self.download_blob(filepath)
             f.write(blob_data)
 
-    async def upload_blob(self, filepath: str, data: bytes, **kwargs) -> str:
-        """Upload data to a given blob file"""
-        async with self.get_blob_client(filepath, check_exists=False) as blob_client:
-            await blob_client.upload_blob(data, **kwargs)
+    async def upload_blob(self, filepath: Path, **kwargs) -> str:
+        """Upload a file to a given blob file, overwriting if it already exists"""
+        async with self.get_client() as container_client:
+            with open(file=filepath, mode="rb") as f:
+                blob_client = await container_client.upload_blob(
+                    filepath.name, f, overwrite=True, **kwargs
+                )
         return blob_client.url
 
-    async def upload_blob_from_file(self, filepath: str, local_filepath: str, **kwargs):
-        """Upload a file to a given blob file"""
-        with open(file=local_filepath, mode="rb") as f:
-            data = f.read()
-            blob_client_url = await self.upload_blob(filepath, data, **kwargs)
-        return blob_client_url
-
-    async def delete_blob(self, filepath: str, **kwargs):
+    async def remove_blob(self, blob_name: str, **kwargs):
         """Delete a given blob file"""
-        async with self.get_blob_client(filepath) as blob_client:
+        async with self.get_blob_client(blob_name) as blob_client:
             await blob_client.delete_blob(**kwargs)
