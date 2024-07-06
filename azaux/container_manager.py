@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from azure.core.credentials_async import AsyncTokenCredential
+
 from azure.core.exceptions import ResourceNotFoundError
 from azure.storage.blob.aio import BlobServiceClient
 
@@ -17,11 +18,11 @@ class ContainerManager(StorageResource):
         container: str,
         account: str,
         credential: AsyncTokenCredential,
-        resource_group: str,
+        max_single_put_size=4 * 1024 * 1024,
     ):
-        self.resource_group = resource_group
         self.container = container
         super().__init__(account, credential)
+        self.max_single_put_size = max_single_put_size
 
     @property
     def resource_type(self) -> StorageResourceType:
@@ -29,17 +30,21 @@ class ContainerManager(StorageResource):
 
     @asynccontextmanager
     async def get_client(self):
+        max_put = self.max_single_put_size
         async with BlobServiceClient(
-            self.endpoint, self.storage.credential
+            self.endpoint, self.storage.credential, max_single_put_size=max_put
         ) as service_client:
-            yield service_client.get_container_client(self.container)
+            container_client = service_client.get_container_client(self.container)
+            if not await container_client.exists():
+                raise ResourceNotFoundError(f"Container not found: '{self.container}'")
+            yield container_client
 
     @asynccontextmanager
     async def get_blob_client(self, filepath: str):
         async with self.get_client() as container_client:
             blob_client = container_client.get_blob_client(filepath)
             if not await blob_client.exists():
-                raise FileNotFoundError(f"Blob file not found: '{filepath}'")
+                raise ResourceNotFoundError(f"Blob file not found: '{filepath}'")
             yield blob_client
 
     async def list_blobs(self, **kwargs) -> list[str]:
@@ -63,16 +68,18 @@ class ContainerManager(StorageResource):
             blob_data = await self.download_blob(filepath)
             f.write(blob_data)
 
-    async def upload_blob(self, filepath: str, data: bytes, **kwargs):
+    async def upload_blob(self, filepath: str, data: bytes, **kwargs) -> str:
         """Upload data to a given blob file"""
         async with self.get_blob_client(filepath) as blob_client:
             await blob_client.upload_blob(data, **kwargs)
+        return blob_client.url
 
     async def upload_blob_from_file(self, filepath: str, local_filepath: str, **kwargs):
         """Upload a file to a given blob file"""
         with open(file=local_filepath, mode="rb") as f:
             data = f.read()
-            await self.upload_blob(filepath, data, **kwargs)
+            blob_client_url = await self.upload_blob(filepath, data, **kwargs)
+        return blob_client_url
 
     async def delete_blob(self, filepath: str, **kwargs):
         """Delete a given blob file"""
