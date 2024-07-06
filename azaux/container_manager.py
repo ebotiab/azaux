@@ -29,21 +29,21 @@ class ContainerManager(StorageResource):
         return StorageResourceType.BLOB
 
     @asynccontextmanager
-    async def get_client(self):
+    async def get_client(self, check_exists=True):
         max_put = self.max_single_put_size
         async with BlobServiceClient(
             self.endpoint, self.storage.credential, max_single_put_size=max_put
         ) as service_client:
             container_client = service_client.get_container_client(self.container)
-            if not await container_client.exists():
+            if check_exists and not await container_client.exists():
                 raise ResourceNotFoundError(f"Container not found: '{self.container}'")
             yield container_client
 
     @asynccontextmanager
-    async def get_blob_client(self, filepath: str):
+    async def get_blob_client(self, filepath: str, check_exists=True):
         async with self.get_client() as container_client:
             blob_client = container_client.get_blob_client(filepath)
-            if not await blob_client.exists():
+            if check_exists and not await blob_client.exists():
                 raise ResourceNotFoundError(f"Blob file not found: '{filepath}'")
             yield blob_client
 
@@ -70,7 +70,7 @@ class ContainerManager(StorageResource):
 
     async def upload_blob(self, filepath: str, data: bytes, **kwargs) -> str:
         """Upload data to a given blob file"""
-        async with self.get_blob_client(filepath) as blob_client:
+        async with self.get_blob_client(filepath, check_exists=False) as blob_client:
             await blob_client.upload_blob(data, **kwargs)
         return blob_client.url
 
