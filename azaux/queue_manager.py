@@ -36,7 +36,6 @@ class QueueManager(StorageResource):
     async def send_messages(self, instance_inputs: list[str]):
         """Send messages to the queue"""
         async with self.get_client() as queue_client:
-            send_message_tasks = [
-                queue_client.send_message(input_msg) for input_msg in instance_inputs
-            ]
-            await asyncio.gather(*send_message_tasks)
+            async with asyncio.TaskGroup() as tg:
+                for input_msg in instance_inputs:
+                    tg.create_task(queue_client.send_message(input_msg))  # type: ignore
