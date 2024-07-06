@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from azure.core.credentials import AzureNamedKeyCredential
+from azure.core.exceptions import ResourceNotFoundError
 from azure.data.tables import TableEntity
 from azure.data.tables.aio import TableServiceClient
 
@@ -29,10 +30,13 @@ class TableManager(StorageResource):
         return StorageResourceType.TABLE
 
     @asynccontextmanager
-    async def get_client(self):
+    async def get_client(self, check_exists: bool = True):
         async with TableServiceClient(
             self.endpoint, credential=self.storage.credential
         ) as service_client:
+            # NOTE: not exists() method for TableClient
+            if check_exists and not service_client.query_tables(self.table):
+                raise ResourceNotFoundError(f"Table not found: '{self.table}'")
             yield service_client.get_table_client(self.table)
 
     async def upsert_entity(self, entity_data: dict):
