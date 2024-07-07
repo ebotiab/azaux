@@ -1,85 +1,166 @@
-# import pytest
-# from unittest.mock import AsyncMock, MagicMock
-# from azaux.container_manager import ContainerManager
+import os
+from pathlib import Path
+import sys
+from tempfile import NamedTemporaryFile
+
+from azure.core.exceptions import ResourceNotFoundError
+import azure.storage.blob.aio
+import pytest
+
+from azaux.container_manager import ContainerManager
+
+from .mocks import MockAzureCredential
 
 
-# @pytest.mark.asyncio
-# async def test_list_blobs(container_manager: ContainerManager):
-#     # Mock the list_blobs method of the container client
-#     container_manager.get_client.return_value.list_blobs.return_value = [
-#         MagicMock(name="blob1", spec=["name"]),
-#         MagicMock(name="blob2", spec=["name"]),
-#     ]
-
-#     # Call the list_blobs method of ContainerManager
-#     result = await container_manager.list_blobs()
-
-#     # Check the result
-#     assert result == ["blob1", "blob2"]
+@pytest.fixture
+def container_manager(monkeypatch):
+    return ContainerManager(
+        container=os.environ["AZURE_STORAGE_CONTAINER"],
+        account=os.environ["AZURE_STORAGE_ACCOUNT"],
+        credential=MockAzureCredential(),
+    )
 
 
-# @pytest.mark.asyncio
-# async def test_download_blob(container_manager: ContainerManager):
-#     # Mock the download_blob method of the blob client
-#     blob_client = container_manager.get_blob_client.return_value
-#     blob_client.download_blob.return_value.readall.return_value = b"test-data"
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.version_info.minor < 10, reason="requires Python 3.10 or higher"
+)
+async def test_upload_get_names_and_remove(
+    monkeypatch, mock_env, container_manager: ContainerManager
+):
+    with NamedTemporaryFile(suffix=".pdf") as temp_file:
+        f = temp_file.file
+        filepath = Path(f.name)
 
-#     # Call the download_blob method of ContainerManager
-#     result = await container_manager.download_blob("test-filepath")
+        # Set up mocks used by upload_blob
+        async def mock_exists(*args, **kwargs):
+            return True
 
-#     # Check the result
-#     assert result == b"test-data"
+        monkeypatch.setattr(
+            "azure.storage.blob.aio.ContainerClient.exists", mock_exists
+        )
+
+        async def mock_upload_blob(self, name: str, *args, **kwargs):
+            assert name == filepath.name
+            return azure.storage.blob.aio.BlobClient.from_blob_url(
+                "https://test.blob.core.windows.net/test/test.pdf",
+                credential=MockAzureCredential(),  # type: ignore
+            )
+
+        monkeypatch.setattr(
+            "azure.storage.blob.aio.ContainerClient.upload_blob", mock_upload_blob
+        )
+
+        blob_url = await container_manager.upload_blob(filepath)
+        assert blob_url == "https://test.blob.core.windows.net/test/test.pdf"
+
+        def mock_list_blob_names(*args, **kwargs):
+            assert kwargs.get("name_starts_with") is None
+
+            class AsyncBlobItemsIterator:
+                def __init__(self, blob_name: str):
+                    self.blob_names_list = [blob_name]
+
+                def __aiter__(self):
+                    return self
+
+                async def __anext__(self):
+                    if self.blob_names_list:
+                        return self.blob_names_list.pop()
+                    raise StopAsyncIteration
+
+            return AsyncBlobItemsIterator(filepath.name)
+
+        monkeypatch.setattr(
+            "azure.storage.blob.aio.ContainerClient.list_blob_names",
+            mock_list_blob_names,
+        )
+
+        assert [filepath.name] == await container_manager.get_blob_names()
+
+        async def mock_delete_blob(self, name: str, *args, **kwargs):
+            assert name == filepath.name
+            return True
+
+        monkeypatch.setattr(
+            "azure.storage.blob.aio.ContainerClient.delete_blob", mock_delete_blob
+        )
+
+        await container_manager.remove_blob(filepath.name)
 
 
-# @pytest.mark.asyncio
-# async def test_download_blob_to_file(container_manager: ContainerManager, tmp_path):
-#     # Mock the download_blob method of ContainerManager
-#     container_manager.download_blob = AsyncMock(return_value=b"test-data")
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.version_info.minor < 10, reason="requires Python 3.10 or higher"
+)
+async def test_upload_create_and_error_when_no_container(
+    monkeypatch, mock_env, container_manager: ContainerManager
+):
+    container_manager.create_by_default = True
+    with NamedTemporaryFile(suffix=".pdf") as temp_file:
+        f = temp_file.file
+        filepath = Path(f.name)
 
-#     # Call the download_blob_to_file method of ContainerManager
-#     filepath = tmp_path / "test-file.txt"
-#     await container_manager.download_blob_to_file(filepath)
+        # Set up mocks used by upload_blob
+        async def mock_exists(*args, **kwargs):
+            return False
 
-#     # Check if the file exists and contains the correct data
-#     assert filepath.exists()
-#     assert filepath.read_bytes() == b"test-data"
+        monkeypatch.setattr(
+            "azure.storage.blob.aio.ContainerClient.exists", mock_exists
+        )
+
+        async def mock_create_container(*args, **kwargs):
+            return
+
+        monkeypatch.setattr(
+            "azure.storage.blob.aio.ContainerClient.create_container",
+            mock_create_container,
+        )
+
+        async def mock_upload_blob(self, name, *args, **kwargs):
+            assert name == filepath.name
+            return azure.storage.blob.aio.BlobClient.from_blob_url(
+                "https://test.blob.core.windows.net/test/test.pdf",
+                credential=MockAzureCredential(),  # type: ignore
+            )
+
+        monkeypatch.setattr(
+            "azure.storage.blob.aio.ContainerClient.upload_blob", mock_upload_blob
+        )
+
+        blob_url = await container_manager.upload_blob(filepath)
+        assert blob_url == "https://test.blob.core.windows.net/test/test.pdf"
+
+        # assert error when create_by_default is False
+        container_manager.create_by_default = False
+        with pytest.raises(ResourceNotFoundError):
+            await container_manager.upload_blob(filepath)
 
 
-# @pytest.mark.asyncio
-# async def test_upload_blob(container_manager: ContainerManager):
-#     # Mock the upload_blob method of the blob client
-#     blob_client = container_manager.get_blob_client.return_value
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.version_info.minor < 10, reason="requires Python 3.10 or higher"
+)
+async def test_remove_error_if_no_container(monkeypatch, mock_env, container_manager):
+    async def mock_exists(*args, **kwargs):
+        return False
 
-#     # Call the upload_blob method of ContainerManager
-#     await container_manager.upload_blob("test-filepath", b"test-data")
+    monkeypatch.setattr("azure.storage.blob.aio.ContainerClient.exists", mock_exists)
 
-#     # Check if the upload_blob method of the blob client was called with the correct arguments
-#     blob_client.upload_blob.assert_called_once_with(b"test-data")
+    async def mock_delete_blob(*args, **kwargs):
+        assert False, "delete_blob() shouldn't have been called"
 
+    monkeypatch.setattr(
+        "azure.storage.blob.aio.ContainerClient.delete_blob", mock_delete_blob
+    )
 
-# @pytest.mark.asyncio
-# async def test_upload_blob_from_file(container_manager: ContainerManager):
-#     # Mock the upload_blob method of ContainerManager
-#     container_manager.upload_blob = AsyncMock()
-
-#     # Call the upload_blob_from_file method of ContainerManager
-#     await container_manager.upload_blob_from_file(
-#         "test-filepath", "test-local-filepath"
-#     )
-
-#     # Check if the upload_blob method of ContainerManager was called with the correct arguments
-#     container_manager.upload_blob.assert_called_once_with(
-#         "test-filepath", b"test-local-filedata"
-#     )
+    with pytest.raises(ResourceNotFoundError):
+        await container_manager.remove_blob()
 
 
-# @pytest.mark.asyncio
-# async def test_delete_blob(container_manager: ContainerManager):
-#     # Mock the delete_blob method of the blob client
-#     blob_client = container_manager.get_blob_client.return_value
-
-#     # Call the delete_blob method of ContainerManager
-#     await container_manager.delete_blob("test-filepath")
-
-#     # Check if the delete_blob method of the blob client was called with the correct arguments
-#     blob_client.delete_blob.assert_called_once()
+def test_storage_connection_string(mock_env, container_manager: ContainerManager):
+    with pytest.raises(ValueError):
+        container_manager.storage.from_connection_string("error_test")
+    container_manager.storage.from_connection_string(
+        "DefaultEndpointsProtocol=test;AccountName=test;AccountKey=test;"
+    )
