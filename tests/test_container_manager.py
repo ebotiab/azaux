@@ -29,8 +29,7 @@ async def test_upload_get_names_and_remove(
     monkeypatch, mock_env, container_manager: ContainerManager
 ):
     with NamedTemporaryFile(suffix=".pdf") as temp_file:
-        f = temp_file.file
-        filepath = Path(f.name)
+        filepath = Path(temp_file.file.name)
 
         # Set up mocks used by upload_blob
         async def mock_exists(*args, **kwargs):
@@ -96,10 +95,8 @@ async def test_upload_get_names_and_remove(
 async def test_upload_create_and_error_when_no_container(
     monkeypatch, mock_env, container_manager: ContainerManager
 ):
-    container_manager.create_by_default = True
     with NamedTemporaryFile(suffix=".pdf") as temp_file:
-        f = temp_file.file
-        filepath = Path(f.name)
+        filepath = Path(temp_file.file.name)
 
         # Set up mocks used by upload_blob
         async def mock_exists(*args, **kwargs):
@@ -128,6 +125,8 @@ async def test_upload_create_and_error_when_no_container(
             "azure.storage.blob.aio.ContainerClient.upload_blob", mock_upload_blob
         )
 
+        # assert upload when create_by_default is True
+        container_manager.create_by_default = True
         blob_url = await container_manager.upload_blob(filepath)
         assert blob_url == "https://test.blob.core.windows.net/test/test.pdf"
 
@@ -141,7 +140,9 @@ async def test_upload_create_and_error_when_no_container(
 @pytest.mark.skipif(
     sys.version_info.minor < 10, reason="requires Python 3.10 or higher"
 )
-async def test_remove_error_if_no_container(monkeypatch, mock_env, container_manager):
+async def test_remove_error_if_no_container(
+    monkeypatch, mock_env, container_manager: ContainerManager
+):
     async def mock_exists(*args, **kwargs):
         return False
 
@@ -155,7 +156,7 @@ async def test_remove_error_if_no_container(monkeypatch, mock_env, container_man
     )
 
     with pytest.raises(ResourceNotFoundError):
-        await container_manager.remove_blob()
+        await container_manager.remove_blob(blob_name="")
 
 
 def test_storage_connection_string(mock_env, container_manager: ContainerManager):

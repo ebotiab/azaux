@@ -119,5 +119,5 @@ class ContainerManager(StorageResource):
         
         :param blob_name: The name of the blob file.
         """
-        async with self.get_blob_client(blob_name) as blob_client:
-            await blob_client.delete_blob(**kwargs)
+        async with self.get_client() as container_client:
+            await container_client.delete_blob(blob_name, **kwargs)
