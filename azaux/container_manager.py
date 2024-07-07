@@ -60,7 +60,7 @@ class ContainerManager(StorageResource):
     async def get_blob_client(self, blob_name: str):
         """
         Retrieve a client for a given blob file
-        
+
         :param blob_name: The name of the blob file.
         """
         async with self.get_client() as container_client:
@@ -74,14 +74,16 @@ class ContainerManager(StorageResource):
         async with self.get_client() as container_client:
             return [b async for b in container_client.list_blob_names(**kwargs)]
 
-    async def download_blob(self, blob_name: str):
+    async def download_blob(self, blob_name: str, **kwargs):
         """
         Retrieve data from a given blob file within the container in bytes.
 
         :param blob_name: The name of the blob file.
         """
-        async with self.get_blob_client(blob_name) as blob_client:
-            blob = await blob_client.download_blob()
+        async with self.get_client() as container_client:
+            blob = await container_client.download_blob(
+                blob_name, encoding=None, **kwargs
+            )
             return await blob.readall()
 
     async def download_blob_to_file(self, blob_name: str, filepath: Path | None = None):
@@ -93,8 +95,7 @@ class ContainerManager(StorageResource):
         """
         filepath = filepath or Path(blob_name)
         with open(file=filepath, mode="wb") as f:
-            blob_data = await self.download_blob(blob_name)
-            f.write(blob_data)
+            f.write(await self.download_blob(blob_name))
 
     async def upload_blob(
         self, filepath: Path, blob_name: str | None = None, **kwargs
@@ -116,7 +117,7 @@ class ContainerManager(StorageResource):
     async def remove_blob(self, blob_name: str, **kwargs):
         """
         Delete a given blob
-        
+
         :param blob_name: The name of the blob file.
         """
         async with self.get_client() as container_client:
