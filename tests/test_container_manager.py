@@ -9,7 +9,7 @@ import pytest
 
 from azaux.container_manager import ContainerManager
 
-from .mocks import MockAzureCredential
+from .mocks import MockAzureCredential, MockBlob
 
 
 @pytest.fixture
@@ -25,13 +25,13 @@ def container_manager(monkeypatch):
 @pytest.mark.skipif(
     sys.version_info.minor < 10, reason="requires Python 3.10 or higher"
 )
-async def test_upload_get_names_and_remove(
+async def test_upload_get_names_download_and_remove(
     monkeypatch, mock_env, container_manager: ContainerManager
 ):
     with NamedTemporaryFile(suffix=".pdf") as temp_file:
         filepath = Path(temp_file.file.name)
 
-        # Set up mocks used by upload_blob
+        # 1. Upload a blob
         async def mock_exists(*args, **kwargs):
             return True
 
@@ -53,6 +53,7 @@ async def test_upload_get_names_and_remove(
         blob_url = await container_manager.upload_blob(filepath)
         assert blob_url == "https://test.blob.core.windows.net/test/test.pdf"
 
+        # 2. Get blob names
         def mock_list_blob_names(*args, **kwargs):
             assert kwargs.get("name_starts_with") is None
 
@@ -77,6 +78,24 @@ async def test_upload_get_names_and_remove(
 
         assert [filepath.name] == await container_manager.get_blob_names()
 
+        # 3. Download blob bytes and saving it to file
+        async def mock_download_blob(self, name: str, *args, **kwargs):
+            assert name == filepath.name
+            return MockBlob()
+
+        monkeypatch.setattr(
+            "azure.storage.blob.aio.ContainerClient.download_blob", mock_download_blob
+        )
+
+        blob_bytes = await MockBlob().readall()
+        assert await container_manager.download_blob(filepath.name) == blob_bytes
+
+        save_path = Path(filepath.parent / "test.pdf")
+        await container_manager.download_blob_to_file(filepath.name, save_path)
+        with open(file=save_path, mode="rb") as f:
+            assert f.read() == blob_bytes
+
+        # 4. Remove blob
         async def mock_delete_blob(self, name: str, *args, **kwargs):
             assert name == filepath.name
             return True
