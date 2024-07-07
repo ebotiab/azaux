@@ -21,31 +21,46 @@ class TableManager(StorageResource):
         table: str,
         account: str,
         credential: AzureNamedKeyCredential,  # | AsyncTokenCredential,
+        create_by_default: bool = False,
     ):
         self.table = table
         super().__init__(account, credential)
+        self.create_by_default = create_by_default
 
     @property
     def resource_type(self):
+        """Return the resource type"""
         return StorageResourceType.TABLE
 
     @asynccontextmanager
-    async def get_client(self, check_exists: bool = True):
+    async def get_client(self):
+        """Retrieve a client for the table"""
         async with TableServiceClient(
             self.endpoint, credential=self.storage.credential
         ) as service_client:
             # NOTE: not exists() method for TableClient
-            if check_exists and not service_client.query_tables(self.table):
-                raise ResourceNotFoundError(f"Table not found: '{self.table}'")
+            if not service_client.query_tables(self.table):
+                if self.create_by_default:  # if table does not exist, create it
+                    await service_client.create_table(self.table)
+                else:  # if table does not exist, raise error
+                    raise ResourceNotFoundError(f"Table not found: '{self.table}'")
             yield service_client.get_table_client(self.table)
 
     async def upsert_entity(self, entity_data: dict):
-        """Upload a table entity to the table storage account with the given PineconeReference"""
+        """
+        Upload a table entity to the table storage account
+
+        :param entity_data: The data to be uploaded as a table entity.
+        """
         async with self.get_client() as table_client:
             await table_client.upsert_entity(entity=entity_data)
 
     async def retrieve_table_entities(self, query: str):
-        """Retrieve all table entities that match a given query"""
+        """
+        Retrieve table entities from the table storage account
+
+        :param query: The query string to filter the table entities.
+        """
         table_entities_list: list[TableEntity] = []
         async with self.get_client() as table_client:
             async for table_ent in table_client.query_entities(query_filter=str(query)):
@@ -53,7 +68,11 @@ class TableManager(StorageResource):
         return table_entities_list
 
     async def remove_table_entity(self, entity: TableEntity):
-        """Remove a table entity from the table storage account"""
+        """
+        Remove a table entity from the table storage account
+
+        :param entity: The table entity to be removed.
+        """
         async with self.get_client() as table_client:
             await table_client.delete_entity(
                 partition_key=entity["PartitionKey"], row_key=entity["RowKey"]
