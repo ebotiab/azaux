@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,7 +26,7 @@ class ContainerManager(StorageResource):
         self,
         container: str,
         account: str,
-        credential: AsyncTokenCredential,
+        credential: str | AsyncTokenCredential,
         create_by_default: bool = False,
         max_single_put_size=4 * 1024 * 1024,
     ):
@@ -113,6 +114,20 @@ class ContainerManager(StorageResource):
                     blob_name, f, overwrite=True, **kwargs
                 )
         return blob_client.url
+
+    async def upload_blobs(
+        self, filepaths: list[Path], blob_names: list[str] | None = None, **kwargs
+    ):
+        """
+        Upload multiple files to blobs with the filepaths as default names.
+
+        :param filepaths: The paths to the files to upload.
+        :param blob_names: The names of the blob files.
+        """
+        paths = zip(filepaths, blob_names or [f.name for f in filepaths])
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(self.upload_blob(fp, n)) for fp, n in paths]
+        return [t.result() for t in tasks]
 
     async def remove_blob(self, blob_name: str, **kwargs):
         """

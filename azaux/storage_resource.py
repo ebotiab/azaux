@@ -25,7 +25,7 @@ class StorageManager:
     STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName={};AccountKey={};EndpointSuffix=core.windows.net"
 
     def __init__(
-        self, account: str, credential: AzureNamedKeyCredential | AsyncTokenCredential
+        self, account: str, credential: str | AzureNamedKeyCredential | AsyncTokenCredential
     ):
         self.account = account
         self.credential = credential
@@ -69,7 +69,7 @@ class StorageResource(ABC):
     def __init__(
         self,
         account: str,
-        credential: AzureNamedKeyCredential | AsyncTokenCredential,
+        credential: str | AzureNamedKeyCredential | AsyncTokenCredential,
     ):
         self.storage = StorageManager(account, credential)
 

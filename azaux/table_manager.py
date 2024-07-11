@@ -35,6 +35,10 @@ class TableManager(StorageResource):
     @asynccontextmanager
     async def get_client(self):
         """Retrieve a client for the table"""
+        if isinstance(self.storage.credential, str):
+            raise ValueError(
+                "Credential must be an AzureNamedKeyCredential or AsyncTokenCredential"
+            )
         async with TableServiceClient(
             self.endpoint, credential=self.storage.credential
         ) as service_client:
