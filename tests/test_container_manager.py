@@ -13,7 +13,7 @@ from .mocks import MockAzureCredential, MockBlob
 
 
 @pytest.fixture
-def container_manager(monkeypatch):
+def container_manager():
     return ContainerManager(
         container=os.environ["AZURE_STORAGE_CONTAINER"],
         account=os.environ["AZURE_STORAGE_ACCOUNT"],
