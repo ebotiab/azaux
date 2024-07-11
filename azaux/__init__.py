@@ -10,4 +10,4 @@ __all__ = [
     "StorageManager",
 ]
 
-__version__ = "0.2.2"
+__version__ = "0.1.1"
