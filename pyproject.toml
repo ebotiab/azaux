@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "azaux"
-version = "v0.1.1"
+version = "v0.1.3"
 description = ""
 authors = ["Enrique <ebotiabarbera@gmail.com>"]
 readme = "README.md"
