@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import overload
 
 from azure.core.credentials_async import AsyncTokenCredential
 
@@ -75,7 +76,15 @@ class ContainerManager(StorageResource):
         async with self.get_client() as container_client:
             return [b async for b in container_client.list_blob_names(**kwargs)]
 
-    async def download_blob(self, blob_name: str, **kwargs):
+    @overload
+    async def download_blob(self, blob_name: str, encoding: None, **kw) -> bytes: ...
+
+    @overload
+    async def download_blob(self, blob_name: str, encoding: str, **kw) -> str: ...
+
+    async def download_blob(
+        self, blob_name: str, encoding: None | str, **kw
+    ) -> bytes | str:
         """
         Retrieve data from a given blob file within the container in bytes.
 
@@ -83,7 +92,7 @@ class ContainerManager(StorageResource):
         """
         async with self.get_client() as container_client:
             blob = await container_client.download_blob(
-                blob_name, encoding=None, **kwargs
+                blob_name, encoding=encoding, **kw
             )
             return await blob.readall()
 
@@ -96,7 +105,7 @@ class ContainerManager(StorageResource):
         """
         filepath = filepath or Path(blob_name)
         with open(file=filepath, mode="wb") as f:
-            f.write(await self.download_blob(blob_name))
+            f.write(await self.download_blob(blob_name, encoding=None))
 
     async def upload_blob(
         self, filepath: Path, blob_name: str | None = None, **kwargs
