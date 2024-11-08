@@ -14,7 +14,7 @@ def queue_manager():
     return QueueManager(
         queue=os.environ["AZURE_STORAGE_QUEUE"],
         account=os.environ["AZURE_STORAGE_ACCOUNT"],
-        credential=MockAzureCredential(),  # type: ignore
+        api_key=MockAzureCredential(),  # type: ignore
     )
 
 

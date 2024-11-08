@@ -1,8 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from azure.core.credentials import AzureNamedKeyCredential
-from azure.core.credentials_async import AsyncTokenCredential
 from azure.core.exceptions import ResourceNotFoundError
 from azure.storage.queue.aio import QueueServiceClient
 
@@ -23,24 +21,21 @@ class QueueManager(StorageResource):
         self,
         queue: str,
         account: str,
-        credential: AzureNamedKeyCredential | AsyncTokenCredential,
+        api_key: str,
         create_by_default: bool = False,
     ):
         self.queue = queue
-        super().__init__(account, credential)
+        super().__init__(account, api_key)
         self.create_by_default = create_by_default
 
     @property
     def resource_type(self) -> StorageResourceType:
-        """Return the resource type"""
-        return StorageResourceType.QUEUE
+        return StorageResourceType.queue
 
     @asynccontextmanager
     async def get_client(self):
         """Retrieve a client for the queue"""
-        async with QueueServiceClient(
-            self.endpoint, self.storage.credential
-        ) as service_client:
+        async with QueueServiceClient(self.endpoint, self.credential) as service_client:
             # NOTE: not exists() method for QueueClient
             if not service_client.list_queues(self.queue):
                 if self.create_by_default:  # if queue does not exist, create it

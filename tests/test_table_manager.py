@@ -13,7 +13,7 @@ def table_manager(monkeypatch):
     return TableManager(
         table=os.environ["AZURE_STORAGE_TABLE"],
         account=os.environ["AZURE_STORAGE_ACCOUNT"],
-        credential=MockAzureCredential(),  # type: ignore
+        api_key=MockAzureCredential(),  # type: ignore
     )
 
 

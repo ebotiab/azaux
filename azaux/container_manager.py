@@ -3,8 +3,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import overload
 
-from azure.core.credentials_async import AsyncTokenCredential
-
 from azure.core.exceptions import ResourceNotFoundError
 from azure.storage.blob.aio import BlobServiceClient
 
@@ -27,26 +25,25 @@ class ContainerManager(StorageResource):
         self,
         container: str,
         account: str,
-        credential: str | AsyncTokenCredential,
+        api_key: str,
         create_by_default: bool = False,
         max_single_put_size=4 * 1024 * 1024,
     ):
         self.container = container
-        super().__init__(account, credential)
+        super().__init__(account, api_key)
         self.create_by_default = create_by_default
         self.max_single_put_size = max_single_put_size
 
     @property
     def resource_type(self) -> StorageResourceType:
-        """Return the resource type"""
-        return StorageResourceType.BLOB
+        return StorageResourceType.blob
 
     @asynccontextmanager
     async def get_client(self):
         """Retrieve a client for the container"""
         max_put = self.max_single_put_size
         async with BlobServiceClient(
-            self.endpoint, self.storage.credential, max_single_put_size=max_put
+            self.endpoint, credential=self.credential, max_single_put_size=max_put
         ) as service_client:
             container_client = service_client.get_container_client(self.container)
             if not await container_client.exists():
